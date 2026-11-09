@@ -130,6 +130,14 @@ tr.fast td{background:color-mix(in srgb,var(--quality) 9%,transparent)}
 .tile .big{font-size:28px}
 .tile .tr{font-size:12.5px}
 .up{color:var(--good)} .down{color:var(--warn)}
+.stage{display:flex;height:22px;border-radius:7px;overflow:hidden}
+.stage div{display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#fff;overflow:hidden;white-space:nowrap}
+.fbar{display:grid;grid-template-columns:96px minmax(0,1fr) 34px;gap:8px;align-items:center;font-size:13px}
+.fbar .t{height:8px;border-radius:5px;background:var(--line);position:relative;overflow:hidden}
+.fbar .t i{position:absolute;inset:0 auto 0 0;border-radius:5px}
+.bbw{position:relative;height:14px;border-radius:8px;background:var(--line)}
+.bbw i{position:absolute;top:0;bottom:0;border-radius:8px;background:color-mix(in srgb,var(--good) 35%,transparent)}
+.bbw b{position:absolute;top:-4px;width:4px;height:22px;border-radius:2px;background:var(--good)}
 /* plan */
 .count{background:var(--accent);color:var(--on-accent);border-radius:14px;padding:16px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
 .count .eyebrow{color:inherit;opacity:.8}
@@ -221,6 +229,9 @@ nav.bar button[aria-current="page"]{color:var(--accent)}
       <div class="md sub small" id="hBody"></div>
     </div>
     <div class="grid3" id="tiles"></div>
+    <div class="panel" id="nightPanel" hidden></div>
+    <div class="panel" id="recPanel" hidden></div>
+    <div class="panel" id="dayPanel" hidden></div>
     <div class="panel">
       <div><h2>VO2max</h2><p class="sub small">Stima Garmin dalla relazione passo-battito. Sale con tanti km facili, cala con caldo, stanchezza e salite.</p></div>
       <div class="chart" id="vo2Chart"></div>
@@ -550,9 +561,9 @@ function renderHealth(){
     `<div class="stat tile"><span class="eyebrow">HRV notte</span><span class="big num">${hv?.hrv??"–"}</span><span class="tr ${inBand?"up":"down"}">${inBand?"nella tua fascia":"fuori fascia"} ${hv?hv.blLo+"-"+hv.blHi:""}</span></div>`,
     `<div class="stat tile"><span class="eyebrow">Sonno</span><span class="big num">${sl?Math.floor(sl.sl/60)+"h"+String(sl.sl%60).padStart(2,"0"):"–"}</span><span class="tr sub">punteggio ${sl?.ss??"–"} · a letto ${sl?.bed??"–"}</span></div>`,
     `<div class="stat tile"><span class="eyebrow">FC riposo</span><span class="big num">${rh?.rhr??"–"}</span><span class="tr sub">media 30 gg ${Math.round(avg(R,"rhr",30)||0)}</span></div>`,
-    `<div class="stat tile"><span class="eyebrow">Stress</span><span class="big num">${L.str??"–"}</span><span class="tr sub">media 30 gg ${Math.round(avg(R,"str",30)||0)}</span></div>`,
+    `<div class="stat tile"><span class="eyebrow">Stress</span><span class="big num">${lastVal(R,"str")?.str??"–"}</span><span class="tr sub">media 30 gg ${Math.round(avg(R,"str",30)||0)}</span></div>`,
     `<div class="stat tile"><span class="eyebrow">Stato</span><span class="big" style="font-size:22px">${esc(HEALTH.status?.label||"–")}</span><span class="tr sub">carico acuto/cronico ${HEALTH.status?.acwr!=null?kmf(HEALTH.status.acwr):"–"}</span></div>`].join("");
-  drawVo2();drawHrv(R);drawSleep(R);drawLine("#rhrChart",R.slice(-60),"rhr","var(--hr)","FC a riposo");drawLine("#readyChart",R.slice(-60),"tr","var(--good)","Prontezza",[0,100]);
+  renderToday();drawVo2();drawHrv(R);drawSleep(R);drawLine("#rhrChart",R.slice(-60),"rhr","var(--hr)","FC a riposo");drawLine("#readyChart",R.slice(-60),"tr","var(--good)","Prontezza",[0,100]);
   const rp=HEALTH.race||{};
   $("#race").innerHTML=[["5 km",rp.t5],["10 km",rp.t10],["Mezza",rp.th],["Maratona",rp.tm]].map(([l,v])=>`<div><b class="num">${v?hms(v):"–"}</b><span>${l}${v?" · "+mmss(v/({"5 km":5,"10 km":10,"Mezza":21.0975,"Maratona":42.195}[l]))+"/km":""}</span></div>`).join("");
   const b=HEALTH.balance||{},tot=(b.lo||0)+(b.hi||0)+(b.an||0)||1;
@@ -560,6 +571,35 @@ function renderHealth(){
     <div class="zones" style="height:20px">${[["lo","var(--easy)"],["hi","var(--quality)"],["an","var(--hr)"]].map(([k,c])=>`<div style="width:${b[k]/tot*100}%;background:${c}"></div>`).join("")}</div>
     <div class="legend"><span><i class="sw" style="background:var(--easy)"></i>Aerobico basso ${Math.round(b.lo)}</span><span><i class="sw" style="background:var(--quality)"></i>Aerobico alto ${Math.round(b.hi)}</span><span><i class="sw" style="background:var(--hr)"></i>Anaerobico ${Math.round(b.an)}</span></div>
     ${b.note?`<p class="small"><b>${esc(b.note)}.</b> ${esc(b.tip||"")}</p>`:""}`:`<p class="note">Nessun dato.</p>`;
+}
+function renderToday(){
+  const T=HEALTH.today;if(!T){["#nightPanel","#recPanel","#dayPanel"].forEach(x=>$(x).hidden=true);return}
+  const n=T.night||{},hm=m=>Math.floor(m/60)+"h"+String(Math.round(m%60)).padStart(2,"0");
+  const tot=(n.deep||0)+(n.light||0)+(n.rem||0)+(n.awake||0)||1;
+  const st=[["Profondo",n.deep,"#3b4fd8"],["Leggero",n.light,"var(--sleep)"],["REM",n.rem,"#b05bd6"],["Sveglio",n.awake,"var(--warn)"]];
+  $("#nightPanel").hidden=false;
+  $("#nightPanel").innerHTML=`<div class="row between"><h3>La notte</h3><span class="pill ${n.score>=80?"good":n.score>=60?"mute":"warn"}">punteggio ${n.score??"–"} · ${esc(n.q||"")}</span></div>
+   <div class="row" style="align-items:baseline;gap:10px"><span class="big num" style="font-size:40px">${hm(n.min||0)}</span><span class="sub small">dalle <b>${esc(n.start)}</b> alle <b>${esc(n.end)}</b> · bisogno ${hm(n.need||480)}</span></div>
+   <div class="stage">${st.map(([l,v,c])=>v?`<div style="width:${v/tot*100}%;background:${c}">${v/tot>.12?l:""}</div>`:"").join("")}</div>
+   <div class="legend">${st.map(([l,v,c])=>`<span><i class="sw" style="background:${c}"></i>${l} <b>${hm(v||0)}</b></span>`).join("")}</div>
+   <div class="kv"><div><b class="num">${T.hrv?.night??"–"}</b><span>HRV notte · picco ${T.hrv?.high??"–"}</span></div><div><b class="num">${n.hr??"–"}</b><span>FC nel sonno</span></div><div><b class="num">${n.resp??"–"}</b><span>respiri/min</span></div>
+    <div><b class="num">${n.stress??"–"}</b><span>stress nel sonno</span></div><div><b class="num">${n.wakes??"–"}</b><span>risvegli</span></div><div><b class="num">${n.remPct??"–"}%</b><span>REM (ideale 21-31)</span></div></div>
+   ${n.note?`<p class="sub small">${esc(n.note)}</p>`:""}`;
+  const r=T.ready||{},b=T.bb||{};
+  $("#recPanel").hidden=false;
+  $("#recPanel").innerHTML=`<div class="row between"><h3>Recupero</h3>${r.recH?`<span class="pill warn">ancora ${r.recH} ore</span>`:`<span class="pill good">recuperato</span>`}</div>
+   <div style="display:flex;flex-direction:column;gap:6px"><span class="eyebrow">Body battery</span>
+    <div class="bbw"><i style="left:${b.low??0}%;width:${(b.high??0)-(b.low??0)}%"></i><b style="left:calc(${b.now??0}% - 2px)"></b></div>
+    <div class="row between tiny sub num"><span>minimo ${b.low??"–"}</span><span>ora <b style="color:var(--ink)">${b.now??"–"}</b> · al risveglio ${b.wake??"–"}</span><span>massimo ${b.high??"–"}</span></div></div>
+   <div style="display:flex;flex-direction:column;gap:7px"><span class="eyebrow">Prontezza ${r.score??"–"} · cosa la compone</span>
+    ${(r.f||[]).map(([l,v])=>`<div class="fbar"><span class="sub">${esc(l)}</span><div class="t"><i style="width:${v}%;background:${v>=70?"var(--good)":v>=40?"var(--warn)":"var(--bad)"}"></i></div><span class="num small" style="text-align:right">${v}%</span></div>`).join("")}
+    ${r.why?`<p class="sub small">${esc(r.why)}</p>`:""}</div>
+   <div class="kv"><div><b class="num">${T.rhr??"–"}</b><span>FC riposo · 7 gg ${T.rhr7??"–"}</span></div><div><b class="num">${T.hrv?.week??"–"}</b><span>HRV media 7 gg</span></div><div><b class="num">${T.vo2!=null?kmf(T.vo2):"–"}</b><span>VO2max</span></div></div>`;
+  const y=T.yesterday;
+  $("#dayPanel").hidden=!y;
+  if(y)$("#dayPanel").innerHTML=`<h3>Ieri, ${fdate(y.date,{weekday:"long",day:"numeric",month:"long"})}</h3>
+   <div class="kv"><div><b class="num">${(y.steps||0).toLocaleString("it-IT")}</b><span>passi</span></div><div><b class="num">${(y.kcal||0).toLocaleString("it-IT")}</b><span>kcal totali</span></div><div><b class="num">${(y.active||0).toLocaleString("it-IT")}</b><span>kcal attive</span></div>
+    <div><b class="num">${y.intMin??"–"}'</b><span>minuti intensi</span></div><div><b class="num">${y.stress??"–"}</b><span>stress medio</span></div><div><b class="num">${y.floors??"–"}</b><span>piani saliti</span></div></div>`;
 }
 function timeAxis(svg,x,t0,t1,H,m){const d=new Date(t0);d.setDate(1);d.setMonth(d.getMonth()+1);for(;d.getTime()<=t1;d.setMonth(d.getMonth()+1)){el("line",{x1:x(d.getTime()),x2:x(d.getTime()),y1:m.t,y2:H-m.b,stroke:"var(--line)","stroke-dasharray":"2 3"},svg);el("text",{x:x(d.getTime())+3,y:H-6},svg).textContent=d.toLocaleDateString("it-IT",{month:"short"})}}
 function drawVo2(){
