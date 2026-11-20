@@ -26,12 +26,14 @@ osm.addTo(map);L.control.layers({'Mappa':osm,'Satellite':sat,'Topografica':topo}
 fetch('percorso.json?'+Date.now()).then(r=>r.json()).then(d=>{
  document.getElementById('upd').textContent='Aggiornato '+d.aggiornato;
  const b=L.latLngBounds([]);let tot=0;const list=document.getElementById('list');
- d.pezzi.forEach((p,i)=>{const ll=p.coords.map(c=>[c[1],c[0]]);const last=i===d.pezzi.length-1;
+ d.pezzi.forEach((p,i)=>{const ll=p.coords.map(c=>[c[1],c[0]]);const last=p.stato==='nuovo';
   L.polyline(ll,{color:p.colore,weight:last?6:5,opacity:.9}).addTo(map).bindPopup('Pezzo '+p.n+': '+p.nome);
   ll.forEach(x=>b.extend(x));tot+=p.km;
   const el=document.createElement('div');el.className='p';
-  el.innerHTML='<div class="sw" style="background:'+p.colore+'"></div><div><b>Pezzo '+p.n+(last?' (nuovo)':'')+'</b> · '+p.km.toFixed(1)+' km<br><span class="mut">'+p.nome+' · '+p.stato+'</span></div>';
+  el.innerHTML='<div class="sw" style="background:'+p.colore+'"></div><div><b>Pezzo '+p.n+(last?' (nuovo)':'')+'</b> · '+p.km.toFixed(1)+' km<br><span class="mut">'+p.nome+'</span></div>';
+  L.marker(ll[Math.floor(ll.length/3)],{icon:L.divIcon({className:'',html:'<div style="background:'+p.colore+';color:#fff;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;font:700 12px system-ui;border:2px solid #fff">'+p.n+'</div>',iconSize:[22,22]})}).addTo(map);
   list.appendChild(el);});
+ (d.opzionali||[]).forEach(o=>{L.polyline(o.coords.map(c=>[c[1],c[0]]),{color:o.colore,weight:4,dashArray:'6 8'}).addTo(map).bindPopup(o.nome);const el=document.createElement('div');el.className='p';el.innerHTML='<div class="sw" style="background:'+o.colore+'"></div><div><b>Facoltativo</b> · '+o.km.toFixed(1)+' km<br><span class="mut">'+o.nome+' (tratteggiato, non contato nel totale)</span></div>';list.appendChild(el)});
  (d.punti||[]).forEach(q=>L.circleMarker([q.c[1],q.c[0]],{radius:8,color:'#fff',weight:2,fillColor:q.colore,fillOpacity:1}).addTo(map).bindPopup(q.nome));
  document.getElementById('tot').textContent='Totale finora: '+tot.toFixed(1)+' km';
  map.fitBounds(b,{padding:[20,20]});
