@@ -1,0 +1,39 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Trail di venerdì</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#f6f7f4;--fg:#1d2420;--mut:#5d6b63;--card:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#121614;--fg:#e8ede9;--mut:#9aa8a0;--card:#1c221f}}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 -apple-system,system-ui,sans-serif}
+#map{position:absolute;inset:0 0 auto 0;height:62vh}
+#panel{position:absolute;top:62vh;left:0;right:0;bottom:0;overflow:auto;padding:12px max(16px,env(safe-area-inset-left)) calc(16px + env(safe-area-inset-bottom))}
+h1{font-size:17px;margin:0 0 4px}.mut{color:var(--mut);font-size:13px}
+.p{display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:12px;padding:10px 12px;margin-top:8px}
+.sw{width:14px;height:14px;border-radius:4px;flex:none;margin-top:3px}
+.tot{font-weight:700;font-size:16px;margin-top:10px}
+</style></head><body>
+<div id="map"></div>
+<div id="panel"><h1>Trail di venerdì 20/11, costruito a pezzi</h1><div class="mut" id="upd"></div><div id="list"></div><div class="tot" id="tot"></div>
+<div class="mut" style="margin-top:6px">I primi 400 m dalla partenza non sono disegnati (privacy, la pagina è pubblica). In alto a destra puoi passare alla vista satellite.</div></div>
+<script>
+const map=L.map('map');
+const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
+const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri'});
+const topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,attribution:'OpenTopoMap'});
+osm.addTo(map);L.control.layers({'Mappa':osm,'Satellite':sat,'Topografica':topo}).addTo(map);
+fetch('percorso.json?'+Date.now()).then(r=>r.json()).then(d=>{
+ document.getElementById('upd').textContent='Aggiornato '+d.aggiornato;
+ const b=L.latLngBounds([]);let tot=0;const list=document.getElementById('list');
+ d.pezzi.forEach((p,i)=>{const ll=p.coords.map(c=>[c[1],c[0]]);const last=i===d.pezzi.length-1;
+  L.polyline(ll,{color:p.colore,weight:last?6:5,opacity:.9}).addTo(map).bindPopup('Pezzo '+p.n+': '+p.nome);
+  ll.forEach(x=>b.extend(x));tot+=p.km;
+  const el=document.createElement('div');el.className='p';
+  el.innerHTML='<div class="sw" style="background:'+p.colore+'"></div><div><b>Pezzo '+p.n+(last?' (nuovo)':'')+'</b> · '+p.km.toFixed(1)+' km<br><span class="mut">'+p.nome+' · '+p.stato+'</span></div>';
+  list.appendChild(el);});
+ (d.punti||[]).forEach(q=>L.circleMarker([q.c[1],q.c[0]],{radius:8,color:'#fff',weight:2,fillColor:q.colore,fillOpacity:1}).addTo(map).bindPopup(q.nome));
+ document.getElementById('tot').textContent='Totale finora: '+tot.toFixed(1)+' km';
+ map.fitBounds(b,{padding:[20,20]});
+});
+</script></body></html>
