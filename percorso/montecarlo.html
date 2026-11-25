@@ -19,7 +19,7 @@ svg{width:100%;height:90px;margin-top:8px}
 <div id="panel"><h1 id="tit"></h1><div class="mut" id="upd"></div><div id="list"></div><div class="tot" id="tot">Calcolo il percorso…</div><svg id="prof"></svg>
 <div class="mut">Percorso calcolato su strade e sentieri pedonali di OpenStreetMap. Quota indicativa. In alto a destra la vista satellite.</div></div>
 <script>
-const map=L.map('map');
+const map=L.map('map').setView([43.715,7.345],12);
 const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
 const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri'});
 osm.addTo(map);L.control.layers({'Mappa':osm,'Satellite':sat}).addTo(map);
