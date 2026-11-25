@@ -1,0 +1,50 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lungo Nizza-Monaco</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#f6f7f4;--fg:#1d2420;--mut:#5d6b63;--card:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#121614;--fg:#e8ede9;--mut:#9aa8a0;--card:#1c221f}}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 -apple-system,system-ui,sans-serif}
+#map{position:absolute;inset:0 0 auto 0;height:58vh}
+#panel{position:absolute;top:58vh;left:0;right:0;bottom:0;overflow:auto;padding:12px max(16px,env(safe-area-inset-left)) calc(16px + env(safe-area-inset-bottom))}
+h1{font-size:17px;margin:0 0 4px}.mut{color:var(--mut);font-size:13px}
+.p{display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:12px;padding:10px 12px;margin-top:8px}
+.sw{width:14px;height:14px;border-radius:4px;flex:none;margin-top:3px}
+.tot{font-weight:700;font-size:16px;margin-top:10px}
+svg{width:100%;height:90px;margin-top:8px}
+</style></head><body>
+<div id="map"></div>
+<div id="panel"><h1 id="tit"></h1><div class="mut" id="upd"></div><div id="list"></div><div class="tot" id="tot">Calcolo il percorso…</div><svg id="prof"></svg>
+<div class="mut">Percorso calcolato su strade e sentieri pedonali di OpenStreetMap. Quota indicativa. In alto a destra la vista satellite.</div></div>
+<script>
+const map=L.map('map');
+const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
+const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri'});
+osm.addTo(map);L.control.layers({'Mappa':osm,'Satellite':sat}).addTo(map);
+const hv=(a,b)=>{const R=6371000,t=Math.PI/180;const dl=(b[1]-a[1])*t,dn=(b[0]-a[0])*t;const h=Math.sin(dl/2)**2+Math.cos(a[1]*t)*Math.cos(b[1]*t)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
+(async()=>{
+ const d=await fetch('montecarlo.json?'+Date.now()).then(r=>r.json());
+ document.getElementById('tit').textContent=d.titolo;document.getElementById('upd').textContent=d.aggiornato;
+ const b=L.latLngBounds([]);let run=0,walk=0;const all=[];const list=document.getElementById('list');
+ for(const p of d.pezzi){
+  let co=p.w;try{const j=await fetch('https://routing.openstreetmap.de/routed-foot/route/v1/foot/'+p.w.map(x=>x.join(',')).join(';')+'?overview=full&geometries=geojson').then(r=>r.json());co=j.routes[0].geometry.coordinates;}catch(e){}
+  let km=0;for(let i=1;i<co.length;i++)km+=hv(co[i-1],co[i]);km/=1000;
+  if(p.walk)walk+=km;else{run+=km;co.forEach(c=>all.push(c))}
+  const ll=co.map(c=>[c[1],c[0]]);L.polyline(ll,{color:p.colore,weight:5,opacity:.9,dashArray:p.walk?'6 8':null}).addTo(map).bindPopup(p.n+'. '+p.nome);ll.forEach(x=>b.extend(x));
+  L.marker(ll[Math.floor(ll.length/2)],{icon:L.divIcon({className:'',html:'<div style="background:'+p.colore+';color:#fff;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;font:700 12px system-ui;border:2px solid #fff">'+p.n+'</div>',iconSize:[22,22]})}).addTo(map);
+  const el=document.createElement('div');el.className='p';el.innerHTML='<div class="sw" style="background:'+p.colore+'"></div><div><b>'+(p.walk?'Camminata':'Pezzo '+p.n)+'</b> · '+km.toFixed(1)+' km<br><span class="mut">'+p.nome+'</span></div>';list.appendChild(el);
+ }
+ (d.punti||[]).forEach(q=>L.circleMarker([q.c[1],q.c[0]],{radius:7,color:'#fff',weight:2,fillColor:q.colore,fillOpacity:1}).addTo(map).bindPopup(q.nome));
+ map.fitBounds(b,{padding:[20,20]});
+ document.getElementById('tot').textContent='Di corsa: '+run.toFixed(1)+' km · a piedi dopo: '+walk.toFixed(1)+' km';
+ try{const s=[];let acc=0,dd=0;s.push([all[0],0]);for(let i=1;i<all.length;i++){const x=hv(all[i-1],all[i]);dd+=x;acc+=x;if(acc>=120){s.push([all[i],dd]);acc=0}}
+  const E=[];for(let k=0;k<s.length;k+=100){const ch=s.slice(k,k+100);const j=await fetch('https://api.open-meteo.com/v1/elevation?latitude='+ch.map(p=>p[0][1].toFixed(5)).join(',')+'&longitude='+ch.map(p=>p[0][0].toFixed(5)).join(',')).then(r=>r.json());j.elevation.forEach((e,i)=>E.push([ch[i][1],e]))}
+  const m=E.map((x,i)=>{const w=E.slice(Math.max(0,i-2),i+3).map(y=>y[1]).sort((a,b)=>a-b);return [x[0],w[Math.floor(w.length/2)]]});
+  const W=300,H=80,mx=Math.max(...m.map(x=>x[1]),50),D=m.at(-1)[0];const pts=m.map(x=>(x[0]/D*W).toFixed(1)+','+(H-x[1]/mx*(H-10)).toFixed(1)).join(' ');
+  const sv=document.getElementById('prof');sv.setAttribute('viewBox','0 0 '+W+' '+(H+10));
+  sv.innerHTML='<polyline points="0,'+H+' '+pts+' '+W+','+H+'" fill="#1f6feb33" stroke="#1f6feb" stroke-width="1.5"/><text x="2" y="10" font-size="9" fill="currentColor">'+Math.round(mx)+' m</text><text x="'+(W-2)+'" y="'+(H+9)+'" font-size="9" text-anchor="end" fill="currentColor">'+(D/1000).toFixed(0)+' km</text>';
+ }catch(e){}
+})();
+</script></body></html>
